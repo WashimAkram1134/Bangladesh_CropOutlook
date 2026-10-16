@@ -1,61 +1,79 @@
 @import "tailwindcss";
 
 
-/* ─── Design Tokens ─────────────────────────────────────────────────────── */
+/* ─── Option A Design Tokens (Sampled from Reference Image) ───────────────── */
 :root {
-  /* Primary palette — forest green */
-  --color-primary-50: #f0faf4;
+  /* Brand botanical dark green & mint accents */
+  --color-primary-50:  #f0faf4;
   --color-primary-100: #dcf4e8;
   --color-primary-200: #bbe8d1;
   --color-primary-300: #8dd5b2;
-  --color-primary-400: #57ba8a;
-  --color-primary-500: #2d9e69;
-  --color-primary-600: #2d6a4f;   /* main brand */
-  --color-primary-700: #1f5139;
-  --color-primary-800: #183d2b;
-  --color-primary-900: #0f2a1d;
+  --color-primary-400: #4ade80;  /* vibrant mint */
+  --color-primary-500: #22c55e;
+  --color-primary-600: #155338;  /* reference botanical green */
+  --color-primary-700: #134e35;  /* active icon bg */
+  --color-primary-800: #0f3d29;
+  --color-primary-900: #0a261a;
 
-  /* Accent — warm amber */
-  --color-accent-400: #f59e0b;
-  --color-accent-500: #d97706;
+  /* App Shell & Background */
+  --shell-bg: #ffffff;
+  --shell-radius: 28px;
+  --shell-border: rgba(255, 255, 255, 0.7);
+  --shell-shadow: 0 25px 80px -15px rgba(6, 28, 16, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.4);
 
-  /* Neutrals */
-  --color-neutral-50:  #fafaf8;
-  --color-neutral-100: #f4f4f1;
-  --color-neutral-200: #e8e8e3;
-  --color-neutral-300: #d1d1c7;
-  --color-neutral-400: #a8a89a;
-  --color-neutral-500: #737368;
-  --color-neutral-600: #55554c;
-  --color-neutral-700: #3a3a33;
-  --color-neutral-800: #252520;
-  --color-neutral-900: #14140f;
+  /* Sidebar Navigation */
+  --nav-bg: #ffffff;
+  --nav-active-bg: #134e35;
+  --nav-active-icon: #4ade80;
+  --nav-inactive-icon: #758a7e;
+  --nav-hover-icon: #134e35;
+  --nav-border: #edf2ee;
 
-  /* Semantic */
-  --color-bg:         var(--color-neutral-50);
-  --color-surface:    #ffffff;
-  --color-border:     var(--color-neutral-200);
-  --color-border-subtle: var(--color-neutral-100);
-  --color-text:       var(--color-neutral-800);
-  --color-text-muted: var(--color-neutral-500);
-  --color-text-faint: var(--color-neutral-400);
+  /* Cards & Surfaces */
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f8faf8;
+  --color-border: #e8efe9;
+  --color-border-subtle: #f1f5f2;
 
-  /* Status */
-  --color-success: #16a34a;
-  --color-warning: #ca8a04;
-  --color-error:   #dc2626;
-  --color-info:    #0369a1;
+  /* Floating Dark Map Card (Sampled from Reference Overlay) */
+  --map-overlay-bg: rgba(18, 25, 21, 0.90);
+  --map-overlay-border: rgba(255, 255, 255, 0.12);
+  --map-overlay-text: #ffffff;
+  --map-overlay-muted: #94a39b;
+
+  /* Text */
+  --color-text-main: #141c17;
+  --color-text-muted: #6b7c72;
+  --color-text-faint: #98a79f;
+
+  /* Status Badges */
+  --badge-green-bg: #eafaf1;
+  --badge-green-fg: #15803d;
+  --badge-amber-bg: #fef8ee;
+  --badge-amber-fg: #b45309;
+  --badge-red-bg: #fef2f2;
+  --badge-red-fg: #b91c1c;
+
+  /* Heatmap green scale */
+  --heat-0: #f2faf4;
+  --heat-1: #c9eed7;
+  --heat-2: #86efac;
+  --heat-3: #22c55e;
+  --heat-4: #15803d;
+  --heat-5: #134e35;
 
   /* Shadows */
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-  --shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.08), 0 2px 4px -1px rgb(0 0 0 / 0.06);
-  --shadow-panel: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 4px 14px 0 rgba(10, 30, 18, 0.08);
+  --shadow-popover: 0 10px 25px -5px rgba(0, 0, 0, 0.12);
 
-  /* Spacing */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 28px;
 }
 
 /* ─── Base Styles ───────────────────────────────────────────────────────── */
@@ -219,16 +237,60 @@ hr { border: none; border-top: 1px solid var(--color-border); }
 .maplibregl-ctrl-logo { display: none !important; }
 .maplibregl-ctrl-attrib { font-size: 10px !important; }
 
-/* ─── Skeleton loading ──────────────────────────────────────────────────── */
-@keyframes shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+/* ─── Agricultural Background & Shell Styles (Option A) ────────── */
+.app-wallpaper {
+  background-image: url('/images/agri_background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  box-sizing: border-box;
 }
-.skeleton {
-  background: linear-gradient(90deg, var(--color-neutral-100) 25%, var(--color-neutral-200) 50%, var(--color-neutral-100) 75%);
-  background-size: 800px 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-  border-radius: var(--radius-sm);
+
+@media (max-width: 1024px) {
+  .app-wallpaper {
+    padding: 0.5rem;
+    align-items: flex-start;
+  }
+}
+
+.floating-app-shell {
+  background: var(--shell-bg);
+  border-radius: var(--shell-radius);
+  box-shadow: var(--shell-shadow);
+  border: 1px solid var(--shell-border);
+  width: 100%;
+  max-width: 1540px;
+  min-height: 940px;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+@media (max-width: 1024px) {
+  .floating-app-shell {
+    border-radius: 16px;
+  }
+}
+
+/* Custom scrollbar for tables & cards */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* ─── Responsive layout utilities ──────────────────────────────────────── */

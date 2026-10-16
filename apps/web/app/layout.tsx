@@ -29,9 +29,11 @@ export const metadata: Metadata = {
   },
 };
 
+import { ShellLayout } from '@/components/layout/ShellLayout';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -40,11 +42,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen" style={{ background: 'var(--color-bg)' }}>
-        <Navbar />
-        <main id="main-content" className="pt-16">
-          {children}
-        </main>
+      <body className="min-h-screen m-0 p-0 overflow-x-hidden" suppressHydrationWarning>
+        <ShellLayout>{children}</ShellLayout>
       </body>
     </html>
   );

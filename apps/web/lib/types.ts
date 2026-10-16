@@ -37,6 +37,9 @@ export interface ForecastRecord {
   source: DataSource;
   modelRelease: string; // e.g. "EXP_36"
   generatedAt: string; // ISO timestamp of when model was run
+  soilMoisture?: number;
+  temperature?: number;
+  confidenceScore?: number;
 }
 
 // ─── Environmental Variables ──────────────────────────────────────────────────
