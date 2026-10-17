@@ -35,4 +35,6 @@ __pycache__/
 *$py.class
 .venv/
 venv/
-ENV/
+# Research artifacts (private backend use only)
+private/
+/private/

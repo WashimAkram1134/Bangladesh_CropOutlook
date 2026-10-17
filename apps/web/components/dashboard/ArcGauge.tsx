@@ -33,9 +33,9 @@ export function ArcGauge({
     const angleDeg = startAngle + fraction * angleSpan;
     const angleRad = (angleDeg * Math.PI) / 180;
 
-    const x = cx + radius * Math.cos(angleRad);
-    const y = cy + radius * Math.sin(angleRad);
-    const rotation = angleDeg + 90; // orient capsule radially
+    const x = Number((cx + radius * Math.cos(angleRad)).toFixed(3));
+    const y = Number((cy + radius * Math.sin(angleRad)).toFixed(3));
+    const rotation = Number((angleDeg + 90).toFixed(3));
     const isActive = i <= activeCount;
 
     return {
@@ -83,16 +83,27 @@ export function ArcGauge({
       </svg>
 
       {/* Central Content */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center pt-5">
+      <div className={`absolute inset-0 flex flex-col items-center justify-center ${size <= 160 ? 'pt-2.5' : 'pt-5'}`}>
         <div className="flex items-baseline gap-1">
-          <span className="text-[32px] font-bold text-white tracking-tight leading-none">
+          <span
+            className="font-bold text-white tracking-tight leading-none"
+            style={{ fontSize: size <= 160 ? '22px' : '32px' }}
+          >
             {valueText}
           </span>
           {unitText && (
-            <span className="text-xs font-semibold text-[#86efac]">{unitText}</span>
+            <span
+              className="font-semibold text-[#86efac]"
+              style={{ fontSize: size <= 160 ? '10px' : '12px' }}
+            >
+              {unitText}
+            </span>
           )}
         </div>
-        <span className="text-[11px] font-medium text-[#94a39b] tracking-wide mt-1">
+        <span
+          className="font-medium text-[#94a39b] tracking-wide mt-0.5"
+          style={{ fontSize: size <= 160 ? '9px' : '11px' }}
+        >
           {labelText}
         </span>
       </div>
