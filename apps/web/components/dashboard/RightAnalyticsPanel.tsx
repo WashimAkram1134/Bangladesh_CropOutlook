@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Search,
   MapPin,
@@ -14,10 +15,12 @@ import {
   TrendingUp,
   RefreshCw,
   CheckCircle2,
+  ExternalLink,
 } from 'lucide-react';
 import type { District } from '@/lib/types';
 import type { SeasonItem, EnvironmentalSeriesResponse, EnvironmentalSummaryResponse } from '@/lib/api';
 import { api } from '@/lib/api';
+import { getSeasonItemAdvisory } from '@/lib/forecastAdvisory';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -64,6 +67,8 @@ export function RightAnalyticsPanel({
 }: RightAnalyticsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+
+  const advisory = getSeasonItemAdvisory(season);
 
   // Environmental Series State
   const [activeVar, setActiveVar] = useState<EnvVarKey>('rainfall_mm');
@@ -201,7 +206,7 @@ export function RightAnalyticsPanel({
             </span>
           </div>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#eafaf1] text-[#15803d] font-semibold border border-[#c9eed7]">
-            As of Sep 2026
+            Observed Indicators
           </span>
         </div>
 
@@ -218,7 +223,7 @@ export function RightAnalyticsPanel({
                 ? `${summaryData.variables.temperature_c.latest_observed.value.toFixed(1)}°C`
                 : '28.4°C'}
             </div>
-            <div className="text-[10px] text-[#94a39b] mt-0.5">ERA5-Land Monthly Mean</div>
+            <div className="text-[10px] text-[#94a39b] mt-0.5">ERA5-Land • Sep 2026</div>
           </div>
 
           <div className="bg-[#f8faf8] rounded-xl p-2.5 border border-[#edf2ee]">
@@ -232,7 +237,7 @@ export function RightAnalyticsPanel({
                 ? `${summaryData.variables.rainfall_mm.latest_observed.value.toFixed(1)} mm`
                 : '162.0 mm'}
             </div>
-            <div className="text-[10px] text-[#94a39b] mt-0.5">Sep 2026 Total</div>
+            <div className="text-[10px] text-[#94a39b] mt-0.5">ERA5-Land • Sep 2026</div>
           </div>
 
           <div className="bg-[#f8faf8] rounded-xl p-2.5 border border-[#edf2ee]">
@@ -246,7 +251,7 @@ export function RightAnalyticsPanel({
                 ? summaryData.variables.ndvi.latest_observed.value.toFixed(3)
                 : '0.685'}
             </div>
-            <div className="text-[10px] text-[#94a39b] mt-0.5">MODIS MOD13A3</div>
+            <div className="text-[10px] text-[#94a39b] mt-0.5">MODIS • Aug 2026</div>
           </div>
 
           <div className="bg-[#f8faf8] rounded-xl p-2.5 border border-[#edf2ee]">
@@ -261,7 +266,7 @@ export function RightAnalyticsPanel({
                 : '0.362'}
               <span className="text-[10px] font-normal text-[#64746b] ml-1">m³/m³</span>
             </div>
-            <div className="text-[10px] text-[#94a39b] mt-0.5">Volumetric Fraction</div>
+            <div className="text-[10px] text-[#94a39b] mt-0.5">ERA5-Land • Sep 2026</div>
           </div>
         </div>
       </div>
@@ -435,38 +440,32 @@ export function RightAnalyticsPanel({
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[10px] text-[#94a39b]">
                   <span>Crops: {s.crops.join(', ')}</span>
-                  <span>Horizon: {s.season === 'Rabi' ? '7 mos' : s.season === 'Kharif-I' ? '10 mos' : '13 mos'}</span>
+                  <span>{idx === 0 ? 'Current window' : 'Upcoming window'}</span>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* Snapshot Dates & Operational Recheck Advice */}
-        <div className="space-y-1.5 pt-2 border-t border-[#edf2ee] text-[11px]">
-          <div className="flex items-center justify-between text-[#64746b]">
-            <span>Forecast Snapshot Date</span>
-            <span className="font-bold text-[#141c17]">2026-09-01</span>
-          </div>
-          <div className="flex items-center justify-between text-[#64746b]">
-            <span>Latest Monthly Observations</span>
-            <span className="font-bold text-[#141c17]">September 2026 (ERA5/MODIS)</span>
-          </div>
-          <div className="flex items-center justify-between text-[#64746b]">
-            <span>SARIMA Model Status</span>
-            <span className="font-bold text-[#15803d] flex items-center gap-1">
-              <CheckCircle2 size={12} />
-              320 / 320 Converged Fits
-            </span>
+        {/* Practical Seasonal Recheck Guidance (Non-Technical, EXP_38) */}
+        <div className="mt-3 p-2.5 rounded-xl bg-[#f0faf4] border border-[#c9eed7] text-[11px] text-[#14532d] flex items-start gap-2">
+          <Calendar size={14} className="shrink-0 text-[#15803d] mt-0.5" />
+          <div className="leading-tight">
+            <strong>{advisory.isCurrentSeason ? 'Current planning season:' : 'Upcoming planning season:'}</strong>{' '}
+            <span>{advisory.message}</span>
           </div>
         </div>
 
-        {/* Recheck Recommendation Banner */}
-        <div className="mt-3 p-2.5 rounded-xl bg-[#fefce8] border border-[#fef08a] text-[11px] text-[#854d0e] flex items-start gap-2">
-          <AlertCircle size={14} className="shrink-0 text-amber-600 mt-0.5" />
-          <p className="leading-tight">
-            <strong>Operational Advisory:</strong> Forecasts for {season.season_label} reflect monthly observation convergence through Sep 2026. Recheck approximately 2 weeks prior to season onset.
-          </p>
+        {/* Link to Methodology */}
+        <div className="mt-3 pt-2.5 border-t border-[#edf2ee] flex items-center justify-between text-[11px]">
+          <span className="text-[#64746b]">Scientific documentation</span>
+          <Link
+            href="/methodology"
+            className="text-[#15803d] hover:text-[#134e35] font-semibold flex items-center gap-1 transition-colors"
+          >
+            <span>Data & Methodology</span>
+            <ExternalLink size={11} />
+          </Link>
         </div>
       </div>
     </div>

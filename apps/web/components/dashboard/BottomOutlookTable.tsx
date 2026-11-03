@@ -9,12 +9,18 @@ import {
   ChevronLeft,
   ChevronRight,
   MapPin,
-  CheckCircle2,
-  AlertTriangle,
 } from 'lucide-react';
 import type { District } from '@/lib/types';
 import type { SeasonItem, ForecastRecordResponse } from '@/lib/api';
 import { formatNumber } from '@/lib/utils';
+import {
+  LAND_UNITS,
+  LAND_UNITS_MAP,
+  type LandUnitKey,
+  convertToHectares,
+  convertFromHectares,
+  formatUnitValue,
+} from '@/lib/landUnits';
 
 interface BottomOutlookTableProps {
   districts: District[];
@@ -52,7 +58,10 @@ export function BottomOutlookTable({
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [showCalculator, setShowCalculator] = useState<boolean>(false);
-  const [areaInput, setAreaInput] = useState<string>(userAreaHa !== null && userAreaHa !== undefined ? String(userAreaHa) : '2.5');
+  const [unit, setUnit] = useState<LandUnitKey>('hectare');
+  const [areaInput, setAreaInput] = useState<string>(
+    userAreaHa !== null && userAreaHa !== undefined ? String(userAreaHa) : '2.5'
+  );
 
   const pageSize = 10;
 
@@ -138,7 +147,6 @@ export function BottomOutlookTable({
       'District_Production_tonnes',
       'Latest_Recorded_Area_ha',
       'Forecast_Horizon_Months',
-      'Status',
     ];
     const rows = filteredRecords.map((r) => {
       const meta = districtMetaMap[normName(r.district)];
@@ -151,7 +159,6 @@ export function BottomOutlookTable({
         r.estimated_district_production_tonnes.toFixed(1),
         r.assumed_district_area_ha.toFixed(1),
         r.max_sarima_lead_months,
-        `"${r.district_area_status}"`,
       ].join(',');
     });
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
@@ -167,11 +174,22 @@ export function BottomOutlookTable({
   const handleAreaChange = (valStr: string) => {
     setAreaInput(valStr);
     const num = parseFloat(valStr);
-    if (!isNaN(num) && num >= 0) {
-      onUserAreaChange(num);
+    if (!isNaN(num) && num > 0) {
+      onUserAreaChange(convertToHectares(num, unit));
     } else if (!valStr.trim()) {
       onUserAreaChange(null);
     }
+  };
+
+  const handleUnitChange = (newUnit: LandUnitKey) => {
+    setUnit(newUnit);
+    if (!areaInput.trim()) return;
+    const num = parseFloat(areaInput);
+    if (isNaN(num) || num <= 0) return;
+    const currentHa = userAreaHa ?? convertToHectares(num, unit);
+    const converted = convertFromHectares(currentHa, newUnit);
+    setAreaInput(formatUnitValue(converted));
+    onUserAreaChange(currentHa);
   };
 
   return (
@@ -265,16 +283,27 @@ export function BottomOutlookTable({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-[#141c17]">Hectares:</span>
+            <span className="text-[11px] font-semibold text-[#141c17]">Field Area:</span>
             <input
               type="number"
               min="0"
-              step="0.5"
+              step="any"
               value={areaInput}
               onChange={(e) => handleAreaChange(e.target.value)}
-              className="w-24 bg-white border border-[#c9eed7] text-[#141c17] rounded-lg px-2 py-0.5 text-xs font-bold outline-none focus:border-[#15803d]"
+              className="w-20 bg-white border border-[#c9eed7] text-[#141c17] rounded-lg px-2 py-0.5 text-xs font-bold outline-none focus:border-[#15803d]"
             />
-            <span className="text-[11px] text-[#64746b]">ha</span>
+            <select
+              value={unit}
+              onChange={(e) => handleUnitChange(e.target.value as LandUnitKey)}
+              className="bg-white border border-[#c9eed7] text-[#141c17] rounded-lg px-2 py-0.5 text-xs font-semibold outline-none focus:border-[#15803d] cursor-pointer"
+              title="Select land measurement unit"
+            >
+              {LAND_UNITS.map((u) => (
+                <option key={u.key} value={u.key}>
+                  {u.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       )}
@@ -323,11 +352,10 @@ export function BottomOutlookTable({
               </th>
               {userAreaHa !== null && userAreaHa !== undefined && userAreaHa > 0 && (
                 <th className="py-2.5 px-3 text-[#15803d]">
-                  User Prod ({userAreaHa} ha)
+                  User Prod ({areaInput} {LAND_UNITS_MAP[unit].shortLabel})
                 </th>
               )}
-              <th className="py-2.5 px-3">SARIMA Horizon</th>
-              <th className="py-2.5 px-3 text-right">Status</th>
+              <th className="py-2.5 px-3">Forecast Lead</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#edf2ee]">
@@ -380,17 +408,28 @@ export function BottomOutlookTable({
                       <span className="text-[10px] text-[#64746b] ml-1">t/ha</span>
                     </td>
 
-                    <td className="py-2.5 px-3 font-semibold text-[#141c17]">
-                      {r.estimated_district_production_tonnes >= 1000
-                        ? `${(r.estimated_district_production_tonnes / 1000).toFixed(1)}k t`
-                        : `${formatNumber(Math.round(r.estimated_district_production_tonnes))} t`}
+                    <td className="py-2.5 px-3">
+                      {r.assumed_district_area_ha > 0 ? (
+                        <span className="font-semibold text-[#141c17]">
+                          {r.estimated_district_production_tonnes >= 1000
+                            ? `${(r.estimated_district_production_tonnes / 1000).toFixed(1)}k t`
+                            : `${formatNumber(Math.round(r.estimated_district_production_tonnes))} t`}
+                        </span>
+                      ) : (
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-amber-700">0 t</span>
+                          <span className="text-[9px] text-[#94a39b] leading-tight">
+                            Conditional (0 BBS area)
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-2.5 px-3 text-[#64746b]">
                       {r.assumed_district_area_ha > 0 ? (
                         <span>{formatNumber(Math.round(r.assumed_district_area_ha))} ha</span>
                       ) : (
-                        <span className="text-amber-700 font-medium">0 ha (Zero BBS)</span>
+                        <span className="text-amber-700 font-medium">0 ha (Unreported)</span>
                       )}
                     </td>
 
@@ -402,29 +441,15 @@ export function BottomOutlookTable({
 
                     <td className="py-2.5 px-3 text-[#64746b]">
                       <span className="px-2 py-0.5 rounded-full bg-[#f1f5f2] text-[10px] font-semibold text-[#4b5563]">
-                        {r.max_sarima_lead_months} Months
+                        {r.max_sarima_lead_months}m
                       </span>
-                    </td>
-
-                    <td className="py-2.5 px-3 text-right">
-                      {r.assumed_district_area_ha > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#15803d] px-2 py-0.5 rounded-full bg-[#eafaf1]">
-                          <CheckCircle2 size={10} />
-                          Positive BBS Area
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200">
-                          <AlertTriangle size={10} />
-                          Zero Area • Conditional
-                        </span>
-                      )}
                     </td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-[#94a39b]">
+                <td colSpan={userAreaHa && userAreaHa > 0 ? 7 : 6} className="py-8 text-center text-[#94a39b]">
                   No district forecasts matching your search criteria.
                 </td>
               </tr>

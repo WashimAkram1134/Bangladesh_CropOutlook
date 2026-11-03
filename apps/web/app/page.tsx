@@ -9,13 +9,12 @@ import { api } from '@/lib/api';
 import { CenterVisualMap } from '@/components/map/CenterVisualMap';
 import { BottomOutlookTable } from '@/components/dashboard/BottomOutlookTable';
 import { RightAnalyticsPanel } from '@/components/dashboard/RightAnalyticsPanel';
-import { Info, AlertCircle, RefreshCw, Layers } from 'lucide-react';
-
-const NOW = new Date('2026-10-17T09:23:33+06:00');
+import { Info, AlertCircle, RefreshCw, Layers, Calendar, Clock } from 'lucide-react';
+import { getDhakaDate, getSeasonItemAdvisory } from '@/lib/forecastAdvisory';
 
 export default function DashboardPage() {
-  // Local fallback seasons while loading API
-  const localSeasonInfo = useMemo(() => getLocalPlanningSeasons(NOW), []);
+  // Local fallback seasons while loading API (using Dhaka timezone date)
+  const localSeasonInfo = useMemo(() => getLocalPlanningSeasons(getDhakaDate()), []);
   const initialSeasons: SeasonItem[] = useMemo(() => {
     return localSeasonInfo.planningSeasons.map((s, idx) => ({
       planning_order: idx + 1,
@@ -154,6 +153,17 @@ export default function DashboardPage() {
     [selectedCrop]
   );
 
+  const seasonAdvisory = useMemo(() => {
+    const adv = getSeasonItemAdvisory(selectedSeason);
+    return {
+      message: adv.message,
+      recheckBadge: adv.badgeLabel,
+      isPast: adv.isPastRecheck,
+      seasonStartFormatted: adv.seasonStartDateStr,
+      order: adv.planningOrder,
+    };
+  }, [selectedSeason]);
+
   return (
     <div className="w-full flex flex-col gap-3.5 select-none">
       {/* ── Guidance Banner for Planning Seasons & Dynamic Crops ──── */}
@@ -178,7 +188,7 @@ export default function DashboardPage() {
               key={s.season_label}
               type="button"
               onClick={() => handleSeasonChange(s)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 selectedSeason.season_label === s.season_label
                   ? 'bg-[#134e35] text-[#4ade80] shadow-sm'
                   : 'text-[#64746b] hover:text-[#134e35]'
@@ -198,7 +208,7 @@ export default function DashboardPage() {
                 key={c}
                 type="button"
                 onClick={() => setSelectedCrop(c)}
-                className={`px-2.5 py-0.5 rounded-full text-xs font-bold transition-all ${
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                   selectedCrop === c
                     ? 'bg-[#15803d] text-white shadow-xs'
                     : 'text-[#64746b] hover:text-[#141c17]'
@@ -209,14 +219,44 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
+      </div>
 
-        {/* Long-range Forecast Guidance Tip */}
-        {selectedSeason.planning_order > 1 && (
-          <div className="flex items-center gap-1.5 text-[11px] text-[#854d0e] bg-[#fefce8] px-2.5 py-1 rounded-md border border-[#fef08a]">
-            <Info size={12} className="shrink-0" />
-            <span>Long-range horizon: please recheck approx. 2 weeks prior to season onset.</span>
+      {/* ── Premium Friendly Advisory Bar (Season-Aware with Exact Recheck Date) ── */}
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl px-4 py-2 border border-[#edf2ee] shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="w-6 h-6 rounded-lg bg-[#eafaf1] border border-[#c9eed7] flex items-center justify-center text-[#15803d]">
+            <Calendar size={13} />
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[#141c17] text-xs">
+              {selectedSeason.season_label}
+            </span>
+            {seasonAdvisory.seasonStartFormatted && (
+              <span className="text-[11px] text-[#64746b]">
+                • Begins {seasonAdvisory.seasonStartFormatted}
+              </span>
+            )}
+          </div>
+          <span className="hidden md:inline-block text-[#94a39b]">•</span>
+          <span className="text-xs text-[#374151]">
+            {seasonAdvisory.message}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 ${
+              selectedSeason.planning_order === 1
+                ? 'bg-[#f1f5f2] text-[#4b5563] border border-[#e5ebe6]'
+                : selectedSeason.planning_order === 2
+                ? 'bg-[#eafaf1] text-[#15803d] border border-[#c9eed7]'
+                : 'bg-amber-50 text-amber-800 border border-amber-200'
+            }`}
+          >
+            <Clock size={11} />
+            <span>{seasonAdvisory.recheckBadge}</span>
+          </span>
+        </div>
       </div>
 
       {/* API Health Alert Banner if snapshot needs update */}
