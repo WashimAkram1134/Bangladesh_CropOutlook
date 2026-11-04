@@ -34,6 +34,10 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+// Static deterministic date for SSR and prerender phases (Nov 3, 2026 Asia/Dhaka)
+// Prevents Next.js Turbopack blocking route errors on new Date() in Client Components during prerender
+const STATIC_PRERENDER_DHAKA_DATE = new Date(2026, 10, 3);
+
 /**
  * Returns a Date object representing the current date in Asia/Dhaka timezone.
  * If a reference date is provided, parses it deterministically without UTC timezone offset errors.
@@ -50,8 +54,14 @@ export function getDhakaDate(ref?: Date | string): Date {
     return ref;
   }
 
+  // When evaluated during Next.js server-side prerender, return the stable static date
+  // to avoid Next.js "unstable value new Date() in a Client Component" error.
+  if (typeof window === 'undefined') {
+    return STATIC_PRERENDER_DHAKA_DATE;
+  }
+
   try {
-    // Current date in Asia/Dhaka
+    // Current date in Asia/Dhaka (evaluated in the browser client)
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Dhaka',
       year: 'numeric',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, Suspense } from 'react';
 import { DISTRICTS } from '@/lib/districts';
 import { getPlanningSeasons as getLocalPlanningSeasons } from '@/lib/season';
 import type { District } from '@/lib/types';
@@ -12,9 +12,13 @@ import { RightAnalyticsPanel } from '@/components/dashboard/RightAnalyticsPanel'
 import { Info, AlertCircle, RefreshCw, Layers, Calendar, Clock } from 'lucide-react';
 import { getDhakaDate, getSeasonItemAdvisory } from '@/lib/forecastAdvisory';
 
-export default function DashboardPage() {
-  // Local fallback seasons while loading API (using Dhaka timezone date)
-  const localSeasonInfo = useMemo(() => getLocalPlanningSeasons(getDhakaDate()), []);
+// Static deterministic reference date for initial fallback before API loads
+// Prevents Next.js dynamic evaluation blocking route errors during server prerender
+const STATIC_FALLBACK_DATE = new Date(2026, 10, 3);
+
+function DashboardPage() {
+  // Local fallback seasons while loading API (using stable static planning date for initial render)
+  const localSeasonInfo = useMemo(() => getLocalPlanningSeasons(STATIC_FALLBACK_DATE), []);
   const initialSeasons: SeasonItem[] = useMemo(() => {
     return localSeasonInfo.planningSeasons.map((s, idx) => ({
       planning_order: idx + 1,
@@ -318,5 +322,22 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen w-full items-center justify-center bg-[#f7f9f7]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-[#155338] border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-medium text-[#155338]">Loading Agricultural Forecasts…</p>
+          </div>
+        </div>
+      }
+    >
+      <DashboardPage />
+    </Suspense>
   );
 }

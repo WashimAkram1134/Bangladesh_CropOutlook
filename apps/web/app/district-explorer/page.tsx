@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import {
   Search, Download, Filter, TrendingUp, TrendingDown, Minus,
@@ -391,9 +391,9 @@ function TopDistrictsChart({ records, onSelect }: {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page Content ────────────────────────────────────────────────────────
 
-export default function DistrictExplorerPage() {
+function DistrictExplorerContent() {
   const [crop, setCrop] = useState<string>('Boro Rice');
   const [divisionFilter, setDivisionFilter] = useState<string>('All Divisions');
   const [districtFilter, setDistrictFilter] = useState<string>('All Districts');
@@ -942,5 +942,22 @@ export default function DistrictExplorerPage() {
         />
       )}
     </>
+  );
+}
+
+export default function DistrictExplorerPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen w-full items-center justify-center bg-[#f7f9f7]">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-[#155338] border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-medium text-[#155338]">Loading District Explorer…</p>
+          </div>
+        </div>
+      }
+    >
+      <DistrictExplorerContent />
+    </Suspense>
   );
 }
