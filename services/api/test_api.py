@@ -390,6 +390,70 @@ class TestBangladeshCropOutlookBackend(unittest.TestCase):
         self.assertEqual(len(lines), 20)  # 1 header + 19 rows
         self.assertIn("All Bangladesh (National)", lines[1])
 
+    def test_22_planner_basic_and_bbs_conversion(self):
+        """22. Verify /api/planner returns 6 crops with verified BBS paddy conversion (3/2) and demo prices."""
+        resp = client.get("/api/planner?district=Dinajpur&area_ha=2.5")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["district"], "Dinajpur")
+        self.assertEqual(data["area_ha"], 2.5)
+        self.assertEqual(data["total_crops"], 6)
+        self.assertIn("global_disclaimer", data)
+        self.assertIn("Demo Prices — Not Actual Selling Prices", data["crops"][0]["price_disclaimer"])
+        self.assertIn("methodology", data)
+        self.assertAlmostEqual(data["rice_equivalent_factor"], 2/3, places=4)
+        self.assertAlmostEqual(data["paddy_conversion_factor"], 1.5, places=4)
+
+        # Check Rice crops specifically for BBS conversion
+        crops_by_name = {c["crop"]: c for c in data["crops"]}
+        for rice_crop in ["Boro Rice", "Aman Rice", "Aus Rice"]:
+            self.assertIn(rice_crop, crops_by_name)
+            rc = crops_by_name[rice_crop]
+            self.assertTrue(rc["is_rice_crop"])
+            self.assertIsNotNone(rc["paddy_equiv_yield_t_ha"])
+            # BBS conversion: Paddy = Rice * 1.5
+            expected_paddy = round(rc["predicted_yield_t_ha"] * 1.5, 3)
+            self.assertAlmostEqual(rc["paddy_equiv_yield_t_ha"], expected_paddy, places=2)
+            self.assertIn("BBS statistical conversion applied", rc["conversion_note"])
+
+        # Check Jute maund conversion
+        jute = crops_by_name["Jute"]
+        self.assertFalse(jute["is_rice_crop"])
+        self.assertIsNotNone(jute["price_per_maund_bdt"])
+        self.assertIsNotNone(jute["field_production_maunds"])
+        self.assertAlmostEqual(jute["maund_to_kg"], 37.3242, places=4)
+
+    def test_23_planner_economics_and_cultivation_cost(self):
+        """23. Verify /api/planner calculates estimated sales value and illustrative net return when cost provided."""
+        # 1. Without cultivation cost
+        resp_no_cost = client.get("/api/planner?district=Dinajpur&area_ha=1.0")
+        self.assertEqual(resp_no_cost.status_code, 200)
+        data_no_cost = resp_no_cost.json()
+        self.assertFalse(data_no_cost["cultivation_cost_bdt_ha_provided"])
+        c0 = data_no_cost["crops"][0]
+        self.assertIsNone(c0["total_cost_bdt"])
+        self.assertIsNone(c0["net_return_bdt"])
+        self.assertGreater(c0["estimated_sales_bdt"], 0)
+
+        # 2. With cultivation cost = 50,000 BDT/ha
+        resp_cost = client.get("/api/planner?district=Dinajpur&area_ha=2.0&cultivation_cost_bdt_ha=50000")
+        self.assertEqual(resp_cost.status_code, 200)
+        data_cost = resp_cost.json()
+        self.assertTrue(data_cost["cultivation_cost_bdt_ha_provided"])
+        for c in data_cost["crops"]:
+            self.assertEqual(c["user_cost_bdt_ha"], 50000)
+            self.assertEqual(c["total_cost_bdt"], 100000)  # 50,000 * 2.0 ha
+            self.assertEqual(c["net_return_bdt"], c["estimated_sales_bdt"] - 100000)
+            self.assertEqual(c["net_return_label"], "Illustrative Net Return")
+
+    def test_24_planner_national_average(self):
+        """24. Verify /api/planner works for All Bangladesh (National Average)."""
+        resp = client.get("/api/planner?district=All Bangladesh&area_ha=1.0")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["district"], "All Bangladesh (National Average)")
+        self.assertEqual(data["total_crops"], 6)
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -49,8 +49,8 @@ export function LeftSidebar({ onLanguageToggle, locale = 'en' }: LeftSidebarProp
     {
       id: 'forecast-comparison',
       href: '/forecast-comparison',
-      label: 'Forecast Comparison',
-      labelBn: 'পূর্বাভাস তুলনা',
+      label: 'Crop & Season Planner',
+      labelBn: 'ফসল ও মৌসুম পরিকল্পনাকারী',
       icon: BarChart3,
       isActive: pathname.startsWith('/forecast-comparison'),
       isFuture: false,

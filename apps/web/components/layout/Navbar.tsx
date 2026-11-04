@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 const NAV_LINKS = [
   { href: '/', label: 'Dashboard', labelBn: 'ড্যাশবোর্ড' },
   { href: '/district-explorer', label: 'District Explorer', labelBn: 'জেলা অন্বেষক' },
-  { href: '/forecast-comparison', label: 'Forecast Comparison', labelBn: 'পূর্বাভাস তুলনা' },
+  { href: '/forecast-comparison', label: 'Crop & Season Planner', labelBn: 'ফসল পরিকল্পনাকারী' },
   { href: '/methodology', label: 'Data & Methodology', labelBn: 'তথ্য ও পদ্ধতি' },
 ];
 

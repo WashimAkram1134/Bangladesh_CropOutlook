@@ -766,6 +766,107 @@ class HistoricalTrendsResponse(BaseModel):
     environmental_variables: Dict[str, Dict[str, str]]
     provenance: Dict[str, str]
 
+# ─── Smart Crop & Season Planner Data ────────────────────────────────────────
+
+# BBS statistical rice-to-paddy conversion factor (BBS Yearbook of Agricultural Statistics 2016,
+# Chapter 1, Sample Crop Cutting Method of Rice).
+# Rice = Paddy × 2/3  →  Paddy-equivalent = Rice-equivalent × 3/2
+RICE_EQUIVALENT_FACTOR: float = 2.0 / 3.0  # rice per unit paddy
+
+# Demo prices (historical reference — NOT actual or future selling prices)
+# Source & reference dates are included in the response for transparency.
+DEMO_PRICES = {
+    "Boro Rice": {
+        "market_unit": "kg",
+        "price_bdt": 36.0,  # BDT per kg paddy equivalent (Boro paddy, May 2026)
+        "price_ref_date": "May 5, 2026",
+        "price_source": "DAM Wholesale Paddy Reference Price (Bangladesh)",
+        "is_paddy_equivalent": True,  # price is per kg paddy; yield must be converted
+        "disclaimer": "Demo Prices — Not Actual Selling Prices",
+    },
+    "Aman Rice": {
+        "market_unit": "kg",
+        "price_bdt": 34.0,  # BDT per kg paddy equivalent (Aman paddy, Nov 2025)
+        "price_ref_date": "November 9, 2025",
+        "price_source": "DAM Wholesale Paddy Reference Price (Bangladesh)",
+        "is_paddy_equivalent": True,
+        "disclaimer": "Demo Prices — Not Actual Selling Prices",
+    },
+    "Aus Rice": {
+        "market_unit": "kg",
+        "price_bdt": 32.0,  # BDT per kg paddy equivalent (approximate)
+        "price_ref_date": "July 2026 (approximate reference)",
+        "price_source": "DAM Wholesale Paddy Reference Price (Bangladesh)",
+        "is_paddy_equivalent": True,
+        "disclaimer": "Demo Prices — Not Actual Selling Prices",
+    },
+    "Potato": {
+        "market_unit": "kg",
+        "price_bdt": 17.5,  # midpoint of BDT 15–20/kg
+        "price_ref_date": "March–April 2026 (approximate reference)",
+        "price_source": "DAM Wholesale Potato Reference Price (Bangladesh)",
+        "is_paddy_equivalent": False,
+        "disclaimer": "Demo Prices — Not Actual Selling Prices",
+    },
+    "Wheat": {
+        "market_unit": "kg",
+        "price_bdt": 36.0,  # BDT per kg
+        "price_ref_date": "April 2026 (approximate reference)",
+        "price_source": "DAM Wholesale Wheat Reference Price (Bangladesh)",
+        "is_paddy_equivalent": False,
+        "disclaimer": "Demo Prices — Not Actual Selling Prices",
+    },
+    "Jute": {
+        "market_unit": "kg",  # stored per kg after maund conversion
+        "price_bdt": 103.5,  # midpoint: BDT 3,950/maund ÷ 37.3242 kg/maund ≈ 105.8 ~ 103.5 (use 3,862.5 avg)
+        "price_ref_date": "October 2026 (approximate reference)",
+        "price_source": "DAM Wholesale Raw Jute Reference Price (Bangladesh) — 1 maund = 37.3242 kg",
+        "is_paddy_equivalent": False,
+        "price_per_maund_bdt": 3862.5,  # midpoint of BDT 3,800–4,100/maund (reference range)
+        "maund_to_kg": 37.3242,
+        "disclaimer": "Demo Prices — Not Actual Selling Prices",
+    },
+}
+
+# Soil & climate suitability notes per crop (qualitative, grounded in BD agricultural science)
+CROP_SUITABILITY_NOTES = {
+    "Boro Rice":  "Requires heavy irrigation; thrives in flat, low-lying areas with clay-loam soils. Best suited for river-delta and floodplain districts.",
+    "Aman Rice":  "Rainfed; suited to seasonal flooding areas. Performs well in districts with reliable July–October monsoon rainfall.",
+    "Aus Rice":   "Short-duration pre-monsoon crop; favoured in well-drained upland soils with moderate rainfall.",
+    "Potato":     "Cool-season crop; best in well-drained sandy loam soils at moderate elevations. Northern districts (Rangpur, Mymensingh) are traditional producers.",
+    "Wheat":      "Cool, dry conditions required; best in fertile alluvial soils. Suited to Rajshahi and northern river-plain districts.",
+    "Jute":       "Demands warm, humid climate and loamy/silty soils near rivers. Classic crop of Dhaka, Mymensingh, and Faridpur regions.",
+}
+
+# Approximate cultivation cost reference (BDT per hectare) — illustrative only
+APPROX_CULTIVATION_COST_BDT_HA = {
+    "Boro Rice":  70_000,
+    "Aman Rice":  45_000,
+    "Aus Rice":   40_000,
+    "Potato":     150_000,
+    "Wheat":      40_000,
+    "Jute":       35_000,
+}
+
+
+def compute_paddy_equivalent_yield(crop: str, yield_t_ha: float) -> float:
+    """
+    For rice crops, convert rice-equivalent yield (EXP_36 output) to paddy-equivalent
+    using the BBS statistical conversion: paddy = rice × 3/2.
+    For non-rice crops, return yield unchanged.
+    """
+    if crop in ("Boro Rice", "Aman Rice", "Aus Rice"):
+        return round(yield_t_ha / RICE_EQUIVALENT_FACTOR, 4)  # = yield × 1.5
+    return yield_t_ha
+
+
+def compute_jute_price_per_kg(price_info: dict) -> float:
+    """Return BDT per kg for jute using the maund conversion."""
+    ppm = price_info.get("price_per_maund_bdt", 3862.5)
+    m2k = price_info.get("maund_to_kg", 37.3242)
+    return round(ppm / m2k, 4)
+
+
 # ─── Endpoints ─────────────────────────────────────────────────────────────
 
 @app.get("/health", response_model=HealthResponse)
@@ -1695,3 +1796,198 @@ def export_historical_csv(
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
+
+# ─── Smart Crop & Season Planner Endpoint ─────────────────────────────────────
+
+@app.get("/api/planner")
+def get_planner(
+    district: str = Query("Dinajpur", description="District name (or 'Bangladesh' for national average)"),
+    area_ha: float = Query(1.0, gt=0, le=100_000, description="Field area in hectares"),
+    cultivation_cost_bdt_ha: Optional[float] = Query(
+        None, ge=0, description="Optional user-entered cultivation cost in BDT per hectare"
+    ),
+):
+    """
+    Smart Crop & Season Planner.
+    Returns all 6 EXP_36 crops available for the given district with verified yield forecasts,
+    BBS paddy-equivalent conversion for rice crops, demo prices, and illustrative economics.
+    """
+    norm_dist = norm_name(district)
+    is_national = norm_dist in (
+        "bangladesh", "allbangladesh", "national", "allbangladeshnational", "bangladeshnational"
+    )
+
+    if is_national:
+        canonical_dist = "All Bangladesh (National Average)"
+    else:
+        if norm_dist not in data_store.district_norm_map:
+            raise HTTPException(status_code=404, detail=f"Unknown district: '{district}'. Available: 64 Bangladesh districts.")
+        canonical_dist = data_store.district_norm_map[norm_dist]
+
+    crop_results = []
+
+    for crop, season in CROP_SEASON.items():
+        # 1. Get EXP_36 yield forecast
+        if is_national:
+            pred_sub = data_store.df_predictions[data_store.df_predictions["Crop"] == crop]
+            if pred_sub.empty:
+                continue
+            tot_prod = float(pred_sub["District_Production_tonnes"].sum())
+            tot_area = float(pred_sub["Latest_District_Area_Hectares"].sum())
+            yield_t_ha = round(tot_prod / tot_area, 3) if tot_area > 0 else round(float(pred_sub["Predicted_Yield_t_ha"].mean()), 3)
+            display_season_val = str(pred_sub.iloc[0].get("Display_Season", ""))
+            target_yr = int(pred_sub.iloc[0].get("Target_Year_Start", 2026))
+            zero_area = False
+            warnings_list: List[str] = []
+        else:
+            pred_row = data_store.df_predictions[
+                (data_store.df_predictions["District"] == canonical_dist) &
+                (data_store.df_predictions["Crop"] == crop)
+            ]
+            if pred_row.empty:
+                continue
+            pr = pred_row.iloc[0]
+            yield_t_ha = round(float(pr["Predicted_Yield_t_ha"]), 3)
+            display_season_val = str(pr.get("Display_Season", ""))
+            target_yr = int(pr.get("Target_Year_Start", 2026))
+            zero_area = str(pr.get("Reported_Zero_District_Area", "")).lower() in ("true", "1")
+            warnings_list = []
+            if zero_area:
+                warnings_list.append("No reported district crop area — yield is a conditional estimate.")
+            if str(pr.get("Long_Horizon_Warning", "")).lower() in ("true", "1"):
+                warnings_list.append("Long lead time — recheck when new observations arrive.")
+
+        # 2. BBS paddy-equivalent conversion for rice crops
+        is_rice = crop in ("Boro Rice", "Aman Rice", "Aus Rice")
+        paddy_equiv_yield_t_ha: Optional[float] = None
+        conversion_note = ""
+        if is_rice:
+            paddy_equiv_yield_t_ha = compute_paddy_equivalent_yield(crop, yield_t_ha)
+            conversion_note = (
+                f"EXP_36 yield ({yield_t_ha:.3f} t/ha) is rice-equivalent. "
+                f"BBS statistical conversion applied: Paddy = Rice x 3/2 = {paddy_equiv_yield_t_ha:.3f} t/ha. "
+                f"Source: BBS Yearbook of Agricultural Statistics 2016, Ch.1."
+            )
+
+        # 3. Field production
+        economic_yield_t_ha = paddy_equiv_yield_t_ha if is_rice else yield_t_ha
+        field_production_tonnes = round(economic_yield_t_ha * area_ha, 3)
+        field_production_kg = round(field_production_tonnes * 1000, 1)
+
+        field_production_maunds: Optional[float] = None
+        if crop == "Jute":
+            maund_to_kg = DEMO_PRICES["Jute"].get("maund_to_kg", 37.3242)
+            field_production_maunds = round(field_production_kg / maund_to_kg, 2)
+
+        # 4. Demo price & estimated sales value
+        price_info = DEMO_PRICES.get(crop, {})
+        price_per_kg_bdt: float = 0.0
+        if crop == "Jute":
+            price_per_kg_bdt = compute_jute_price_per_kg(price_info)
+        else:
+            price_per_kg_bdt = float(price_info.get("price_bdt", 0.0))
+
+        estimated_sales_bdt = round(field_production_kg * price_per_kg_bdt)
+        estimated_sales_per_ha_bdt = round(estimated_sales_bdt / area_ha) if area_ha > 0 else 0
+
+        # 5. Cultivation cost & net return
+        approx_ref_cost_bdt_ha = APPROX_CULTIVATION_COST_BDT_HA.get(crop, 50_000)
+        if cultivation_cost_bdt_ha is not None and cultivation_cost_bdt_ha >= 0:
+            total_cost_bdt = round(cultivation_cost_bdt_ha * area_ha)
+            net_return_bdt_val: Optional[int] = round(estimated_sales_bdt - total_cost_bdt)
+            net_return_per_ha_bdt_val: Optional[int] = round(net_return_bdt_val / area_ha) if area_ha > 0 else 0
+            net_return_label = "Illustrative Net Return"
+            net_return_note = "Net return = Estimated Sales Value minus entered cultivation cost. Does not include selling or marketing expenses."
+        else:
+            total_cost_bdt = None
+            net_return_bdt_val = None
+            net_return_per_ha_bdt_val = None
+            net_return_label = None
+            net_return_note = None
+
+        # 6. Historical recent average yield (last 3 years)
+        recent_avg_yield: Optional[float] = None
+        if data_store.df_historical is not None and not is_national:
+            hist_sub = data_store.df_historical[
+                (data_store.df_historical["norm_district"] == norm_dist) &
+                (data_store.df_historical["Crop"] == crop)
+            ].sort_values("agri_year")
+            if not hist_sub.empty:
+                recent_vals = [
+                    float(y) for y in hist_sub["Yield_Hectare"].dropna().tail(3).tolist()
+                    if float(y) > 0
+                ]
+                if recent_vals:
+                    recent_avg_yield = round(sum(recent_vals) / len(recent_vals), 3)
+
+        # 7. MAE
+        crop_mae = round(float(data_store.crop_mae_map.get(crop, 0.214)), 3)
+
+        crop_results.append({
+            "crop": crop,
+            "season": season,
+            "display_season": display_season_val,
+            "target_year_start": target_yr,
+            "predicted_yield_t_ha": yield_t_ha,
+            "is_rice_crop": is_rice,
+            "paddy_equiv_yield_t_ha": paddy_equiv_yield_t_ha,
+            "conversion_note": conversion_note,
+            "area_ha": area_ha,
+            "field_production_tonnes": field_production_tonnes,
+            "field_production_kg": field_production_kg,
+            "field_production_maunds": field_production_maunds,
+            "price_per_kg_bdt": round(price_per_kg_bdt, 4),
+            "price_ref_date": price_info.get("price_ref_date", ""),
+            "price_source": price_info.get("price_source", ""),
+            "price_disclaimer": "Demo Prices — Not Actual Selling Prices",
+            "price_per_maund_bdt": price_info.get("price_per_maund_bdt") if crop == "Jute" else None,
+            "maund_to_kg": price_info.get("maund_to_kg") if crop == "Jute" else None,
+            "estimated_sales_bdt": estimated_sales_bdt,
+            "estimated_sales_per_ha_bdt": estimated_sales_per_ha_bdt,
+            "estimated_sales_label": "Estimated Sales Value",
+            "estimated_sales_note": "Before cultivation and selling expenses.",
+            "approx_ref_cost_bdt_ha": approx_ref_cost_bdt_ha,
+            "user_cost_bdt_ha": cultivation_cost_bdt_ha,
+            "total_cost_bdt": total_cost_bdt,
+            "net_return_bdt": net_return_bdt_val,
+            "net_return_per_ha_bdt": net_return_per_ha_bdt_val,
+            "net_return_label": net_return_label,
+            "net_return_note": net_return_note,
+            "recent_avg_yield_t_ha": recent_avg_yield,
+            "suitability_note": CROP_SUITABILITY_NOTES.get(crop, ""),
+            "crop_mae_t_ha": crop_mae,
+            "zero_area": zero_area,
+            "warnings": warnings_list,
+        })
+
+    # 8. Smart ranking by estimated sales value (descending)
+    crop_results.sort(key=lambda x: -x["estimated_sales_bdt"])
+    for i, item in enumerate(crop_results):
+        item["planner_rank"] = i + 1
+
+    seasons_present = sorted(set(r["season"] for r in crop_results))
+
+    methodology = {
+        "rice_conversion": "EXP_36 rice crop yields are expressed as rice-equivalent output. BBS statistical conversion (Paddy = Rice x 3/2) is applied. Source: BBS Yearbook of Agricultural Statistics 2016, Ch.1.",
+        "jute_maund_conversion": "Jute prices are quoted per maund (1 maund = 37.3242 kg). Price per kg = per-maund price / 37.3242.",
+        "pricing": "All prices shown are historical demonstration references only. They do not represent actual or future market selling prices.",
+        "sales_vs_net_return": "Estimated Sales Value = forecasted production x demo price. This is BEFORE expenses. Illustrative Net Return = Sales - user cultivation cost (only computed when cost is supplied).",
+        "forecast_basis": "All yield values are from verified EXP_36 Random Forest forecasts. No model retraining or modification has been performed.",
+        "ranking_basis": "Planner ranking is based on Estimated Sales Value for the given area, using demo prices and BBS conversion. Illustrative only.",
+    }
+
+    return {
+        "district": canonical_dist,
+        "area_ha": area_ha,
+        "cultivation_cost_bdt_ha_provided": cultivation_cost_bdt_ha is not None,
+        "seasons": seasons_present,
+        "crops": crop_results,
+        "total_crops": len(crop_results),
+        "top_crop": crop_results[0]["crop"] if crop_results else None,
+        "top_crop_sales_bdt": crop_results[0]["estimated_sales_bdt"] if crop_results else None,
+        "global_disclaimer": "This planner uses verified EXP_36 forecasts, BBS statistical conversion factors, and historical demonstration prices. It is for educational and planning purposes only. It does not constitute financial, agronomic, or investment advice.",
+        "methodology": methodology,
+        "price_data_as_of": "Demo prices from DAM reference records (various dates 2025-2026)",
+        "rice_equivalent_factor": RICE_EQUIVALENT_FACTOR,
+        "paddy_conversion_factor": round(1.0 / RICE_EQUIVALENT_FACTOR, 6),
+    }

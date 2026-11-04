@@ -277,6 +277,69 @@ export interface HistoricalTrendsResponse {
   provenance: Record<string, string>;
 }
 
+export interface PlannerCropItem {
+  crop: string;
+  season: string;
+  display_season: string;
+  target_year_start: number;
+  predicted_yield_t_ha: number;
+  is_rice_crop: boolean;
+  paddy_equiv_yield_t_ha: number | null;
+  conversion_note: string;
+  area_ha: number;
+  field_production_tonnes: number;
+  field_production_kg: number;
+  field_production_maunds: number | null;
+  price_per_kg_bdt: number;
+  price_ref_date: string;
+  price_source: string;
+  price_disclaimer: string;
+  price_per_maund_bdt: number | null;
+  maund_to_kg: number | null;
+  estimated_sales_bdt: number;
+  estimated_sales_per_ha_bdt: number;
+  estimated_sales_label: string;
+  estimated_sales_note: string;
+  approx_ref_cost_bdt_ha: number | null;
+  user_cost_bdt_ha: number | null;
+  total_cost_bdt: number | null;
+  net_return_bdt: number | null;
+  net_return_per_ha_bdt: number | null;
+  net_return_label: string | null;
+  net_return_note: string | null;
+  recent_avg_yield_t_ha: number | null;
+  suitability_note: string;
+  crop_mae_t_ha: number | null;
+  zero_area: boolean;
+  warnings: string[];
+  planner_rank: number;
+}
+
+export interface PlannerMethodology {
+  rice_conversion: string;
+  jute_maund_conversion: string;
+  pricing: string;
+  sales_vs_net_return: string;
+  forecast_basis: string;
+  ranking_basis: string;
+}
+
+export interface PlannerResponse {
+  district: string;
+  area_ha: number;
+  cultivation_cost_bdt_ha_provided: boolean;
+  seasons: string[];
+  crops: PlannerCropItem[];
+  total_crops: number;
+  top_crop: string | null;
+  top_crop_sales_bdt: number | null;
+  global_disclaimer: string;
+  methodology: PlannerMethodology;
+  price_data_as_of: string;
+  rice_equivalent_factor: number;
+  paddy_conversion_factor: number;
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
 
 async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
@@ -383,6 +446,17 @@ export const api = {
     if (startYear) q += `&start_year=${encodeURIComponent(startYear)}`;
     if (endYear) q += `&end_year=${encodeURIComponent(endYear)}`;
     return q;
+  },
+  getPlanner: (
+    district: string,
+    areaHa: number = 1.0,
+    cultivationCostBdtHa?: number | null
+  ) => {
+    let q = `/api/planner?district=${encodeURIComponent(district)}&area_ha=${encodeURIComponent(areaHa.toString())}`;
+    if (cultivationCostBdtHa !== undefined && cultivationCostBdtHa !== null && cultivationCostBdtHa >= 0) {
+      q += `&cultivation_cost_bdt_ha=${encodeURIComponent(cultivationCostBdtHa.toString())}`;
+    }
+    return fetchJson<PlannerResponse>(q);
   },
 };
 
