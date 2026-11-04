@@ -150,6 +150,11 @@ export function SmartCropPlanner() {
     };
   }, []);
 
+  // Selected Land Unit Definition
+  const selectedUnitDef = useMemo(() => {
+    return LAND_UNITS_MAP[selectedUnit] || LAND_UNITS[0];
+  }, [selectedUnit]);
+
   // ─── Area in Hectares ──────────────────────────────────────────────────────
   const areaHa = useMemo(() => {
     const val = parseFloat(landAreaInput);
@@ -157,11 +162,36 @@ export function SmartCropPlanner() {
     return convertToHectares(val, selectedUnit);
   }, [landAreaInput, selectedUnit]);
 
-  // ─── Cultivation Cost per Ha ───────────────────────────────────────────────
-  const cultivationCostPerHa = useMemo(() => {
+  // ─── Cultivation Cost per Selected Unit & per Hectare ─────────────────────
+  // Value as entered by user in selectedUnit (e.g. BDT / Bigha or BDT / Acre)
+  const cultivationCostPerUnit = useMemo(() => {
     const val = parseFloat(cultivationCostInput);
     return !isNaN(val) && val >= 0 ? val : null;
   }, [cultivationCostInput]);
+
+  // Converted to per-Hectare for backend API & standard calculations
+  const cultivationCostPerHa = useMemo(() => {
+    if (cultivationCostPerUnit === null) return null;
+    const factor = selectedUnitDef.unitHectares;
+    if (factor <= 0) return cultivationCostPerUnit;
+    return cultivationCostPerUnit / factor;
+  }, [cultivationCostPerUnit, selectedUnitDef]);
+
+  // Dynamic presets based on selected unit
+  const presetLow = useMemo(() => {
+    const raw = 35000 * selectedUnitDef.unitHectares;
+    return raw >= 10 ? Math.round(raw) : Number(raw.toFixed(1));
+  }, [selectedUnitDef]);
+
+  const presetAvg = useMemo(() => {
+    const raw = 50000 * selectedUnitDef.unitHectares;
+    return raw >= 10 ? Math.round(raw) : Number(raw.toFixed(1));
+  }, [selectedUnitDef]);
+
+  const presetHigh = useMemo(() => {
+    const raw = 75000 * selectedUnitDef.unitHectares;
+    return raw >= 10 ? Math.round(raw) : Number(raw.toFixed(1));
+  }, [selectedUnitDef]);
 
   // ─── Fetch Planner Data ────────────────────────────────────────────────────
   const fetchPlanner = useCallback(async (dist: string, ha: number, cost: number | null) => {
@@ -286,15 +316,32 @@ export function SmartCropPlanner() {
     setIsEditingPrices(false);
   };
 
-  // ─── Land Unit Change with Value Conversion ───────────────────────────────
+  // ─── Land & Cost Unit Change with Value Conversion ───────────────────────
   const handleUnitChange = (newUnit: LandUnitKey) => {
     if (newUnit === selectedUnit) return;
+    const oldDef = LAND_UNITS_MAP[selectedUnit] || LAND_UNITS[0];
+    const newDef = LAND_UNITS_MAP[newUnit] || LAND_UNITS[0];
+
+    // 1. Convert land area input value
     const currentVal = parseFloat(landAreaInput);
     if (!isNaN(currentVal) && currentVal > 0) {
       const ha = convertToHectares(currentVal, selectedUnit);
       const converted = convertFromHectares(ha, newUnit);
       setLandAreaInput(formatUnitValue(converted));
     }
+
+    // 2. Convert cultivation cost input value to match the new unit (preserving total cost)
+    const currentCost = parseFloat(cultivationCostInput);
+    if (!isNaN(currentCost) && currentCost > 0 && oldDef.unitHectares > 0) {
+      const costPerHa = currentCost / oldDef.unitHectares;
+      const convertedCost = costPerHa * newDef.unitHectares;
+      const formattedCost =
+        convertedCost >= 10
+          ? Math.round(convertedCost).toString()
+          : Number(convertedCost.toFixed(2)).toString();
+      setCultivationCostInput(formattedCost);
+    }
+
     setSelectedUnit(newUnit);
   };
 
@@ -315,6 +362,7 @@ export function SmartCropPlanner() {
       'Demo_Price_BDT_kg',
       'Estimated_Sales_Value_BDT',
       'Estimated_Sales_per_Ha_BDT',
+      `Cultivation_Cost_BDT_per_${selectedUnitDef.shortLabel}`,
       'Cultivation_Cost_BDT_ha',
       'Total_Cost_BDT',
       'Illustrative_Net_Return_BDT',
@@ -336,7 +384,8 @@ export function SmartCropPlanner() {
       c.price_per_kg_bdt.toFixed(2),
       c.estimated_sales_bdt,
       c.estimated_sales_per_ha_bdt,
-      cultivationCostPerHa !== null ? cultivationCostPerHa : 'Not Entered',
+      cultivationCostPerUnit !== null ? cultivationCostPerUnit : 'Not Entered',
+      cultivationCostPerHa !== null ? Math.round(cultivationCostPerHa) : 'Not Entered',
       c.total_cost_bdt !== null ? c.total_cost_bdt : 'Not Entered',
       c.net_return_bdt !== null ? c.net_return_bdt : 'Not Entered',
       `"${c.price_source} (${c.price_ref_date})"`,
@@ -559,62 +608,93 @@ export function SmartCropPlanner() {
             </p>
           </div>
 
-          {/* 3. Optional Cultivation Cost Input */}
+          {/* 3. Optional Cultivation Cost Input (Same unit as Cultivated Land Area) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
                 Cultivation Cost (ঐচ্ছিক খরচ)
               </label>
-              <span className="text-[11px] text-emerald-700 font-medium">BDT / hectare</span>
+              <span className="text-[11px] text-emerald-700 font-semibold">
+                BDT / {selectedUnitDef.shortLabel} ({selectedUnitDef.bengali})
+              </span>
             </div>
-            <div className="relative">
+            <div
+              className="flex items-center rounded-xl border overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500 transition-all"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <div className="pl-3 text-sm font-semibold text-[var(--color-text-muted)] select-none">
+                ৳
+              </div>
               <input
                 type="number"
                 min="0"
-                step="1000"
+                step={presetAvg >= 1000 ? '100' : '10'}
                 value={cultivationCostInput}
                 onChange={(e) => setCultivationCostInput(e.target.value)}
-                placeholder="e.g. 50000 (Optional)"
-                className="w-full h-11 px-3.5 rounded-xl border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
-                style={{
-                  background: 'var(--color-surface)',
-                  borderColor: 'var(--color-border)',
-                  color: 'var(--color-neutral-900)',
-                }}
+                placeholder={`e.g. ${presetAvg.toLocaleString()} (Optional)`}
+                className="w-full h-11 px-2.5 text-sm font-semibold focus:outline-none bg-transparent"
+                style={{ color: 'var(--color-neutral-900)' }}
               />
               {cultivationCostInput && (
                 <button
+                  type="button"
                   onClick={() => setCultivationCostInput('')}
-                  className="absolute right-3 top-3.5 text-[var(--color-text-muted)] hover:text-red-500"
+                  className="px-2 text-[var(--color-text-muted)] hover:text-red-500 transition-colors"
                   title="Clear cost"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
+              <div className="h-6 w-[1px] bg-[var(--color-border)] shrink-0" />
+              <div className="relative shrink-0">
+                <select
+                  value={selectedUnit}
+                  onChange={(e) => handleUnitChange(e.target.value as LandUnitKey)}
+                  className="h-11 pl-2.5 pr-7 text-xs font-semibold bg-transparent cursor-pointer focus:outline-none appearance-none"
+                  style={{ color: 'var(--color-neutral-800)' }}
+                  title="Unit kept synchronized with Cultivated Land Area"
+                >
+                  {LAND_UNITS.map((u) => (
+                    <option key={u.key} value={u.key}>
+                      /{u.shortLabel}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-[var(--color-text-muted)] absolute right-2 top-4 pointer-events-none" />
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-              <span className="text-[10px] text-[var(--color-text-muted)]">Presets:</span>
-              <button
-                type="button"
-                onClick={() => setCultivationCostInput('35000')}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-              >
-                Low (35k)
-              </button>
-              <button
-                type="button"
-                onClick={() => setCultivationCostInput('50000')}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-              >
-                Avg (50k)
-              </button>
-              <button
-                type="button"
-                onClick={() => setCultivationCostInput('75000')}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-              >
-                High (75k)
-              </button>
+
+            <div className="flex items-center justify-between gap-1 mt-1.5 flex-wrap">
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-[10px] text-[var(--color-text-muted)]">Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => setCultivationCostInput(presetLow.toString())}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium transition-colors"
+                >
+                  Low ({presetLow >= 1000 ? `${(presetLow / 1000).toFixed(presetLow % 1000 === 0 ? 0 : 1)}k` : presetLow})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCultivationCostInput(presetAvg.toString())}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium transition-colors"
+                >
+                  Avg ({presetAvg >= 1000 ? `${(presetAvg / 1000).toFixed(presetAvg % 1000 === 0 ? 0 : 1)}k` : presetAvg})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCultivationCostInput(presetHigh.toString())}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 font-medium transition-colors"
+                >
+                  High ({presetHigh >= 1000 ? `${(presetHigh / 1000).toFixed(presetHigh % 1000 === 0 ? 0 : 1)}k` : presetHigh})
+                </button>
+              </div>
+
+              {selectedUnit !== 'hectare' && cultivationCostPerHa !== null && (
+                <span className="text-[10px] text-[var(--color-text-muted)] font-medium">
+                  ≈ ৳ {Math.round(cultivationCostPerHa).toLocaleString()}/ha
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -1035,7 +1115,9 @@ export function SmartCropPlanner() {
                           </span>
                         </div>
                         <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
-                          After subtracting ৳ {cultivationCostPerHa.toLocaleString()} / ha cultivation expense.
+                          After subtracting ৳ {cultivationCostPerUnit?.toLocaleString()} / {selectedUnitDef.shortLabel}
+                          {selectedUnit !== 'hectare' && cultivationCostPerHa !== null ? ` (≈ ৳ ${Math.round(cultivationCostPerHa).toLocaleString()}/ha)` : ''}{' '}
+                          cultivation expense (৳ {c.total_cost_bdt?.toLocaleString()} total).
                         </p>
                       </div>
                     )}
@@ -1085,7 +1167,12 @@ export function SmartCropPlanner() {
                   <th className="py-3 px-4">Demo Price</th>
                   <th className="py-3 px-4 text-right">Est. Gross Sales</th>
                   {cultivationCostPerHa !== null && (
-                    <th className="py-3 px-4 text-right">Illustrative Net Return</th>
+                    <th className="py-3 px-4 text-right">
+                      Illustrative Net Return
+                      <div className="text-[10px] text-[var(--color-text-muted)] font-normal normal-case">
+                        (Cost: ৳ {cultivationCostPerUnit?.toLocaleString()}/{selectedUnitDef.shortLabel})
+                      </div>
+                    </th>
                   )}
                   <th className="py-3 px-4">Suitability Note</th>
                 </tr>
