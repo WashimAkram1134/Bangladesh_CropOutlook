@@ -4,7 +4,7 @@
 
 ### GIS & AI-Based Crop Yield and Production Forecasting for Bangladesh
 
-![Dashboard](apps/web/public/screenshot_option_a.png)
+![Bangladesh Crop Outlook - National Forecast Overview](paper_figures/01_national_forecast_map.png)
 
 <p align="center">
   <a href="https://github.com/WashimAkram1134/Bangladesh_CropOutlook">
@@ -111,12 +111,6 @@ EXP_36 Release Summary
 - **Target variable:** Crop yield in tonnes per hectare (t/ha)
 - **Training data:** BBS agricultural census records 2006–2024
 - **Features:** Seasonal rainfall, mean temperature, NDVI, EVI, soil moisture (7–28 cm), soil pH, elevation, district ID, crop type, season
-- **Evaluation:**
-
-| Test Year | Mode | N | MAE (t/ha) | RMSE (t/ha) | R² |
-|---|---|---|---|---|---|
-| 2024 | Observed Environment | 384 | 0.343 | 0.656 | **0.9909** |
-| 2025 | Observed Environment | 320 | 0.465 | 1.067 | **0.9800** |
 
 **Per-crop typical yield difference (MAE):**
 
@@ -449,13 +443,15 @@ This is a research-driven agricultural platform. Contributions to the UI, docume
 
 ## 📄 License
 
-This project is licensed under the **MIT License**.
+Copyright © 2026 **[Washim Akram](https://github.com/WashimAkram1134)**. All rights reserved.
+
+This project is licensed under the **[MIT License](LICENSE)**.
 
 ---
 
 <div align="center">
 
-Made with ❤️ for Bangladeshi agriculture
+Made with ❤️ by **[Washim Akram](https://github.com/WashimAkram1134)** for Bangladeshi agriculture
 
 **Bangladesh Crop Outlook** · EXP_36 Research Release · 2026
 
